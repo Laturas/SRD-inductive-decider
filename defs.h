@@ -15,7 +15,7 @@ typedef size_t usize;
 typedef struct {
     char* str;
     usize length;
-} string;
+} String;
 
 typedef struct TM_Tape {
     int small_index;
@@ -32,10 +32,10 @@ typedef enum direction {
 	HALT,
 	LEFT,
 	RIGHT,
-} direction;
+} Direction;
 
 typedef struct state {
 	char write;
-	direction dir;
+	Direction dir;
 	char next_state;
 } state;
