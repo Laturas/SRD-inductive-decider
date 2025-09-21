@@ -29,6 +29,8 @@ typedef state Machine[STATES][SYMBOLS];
 #define FLUSH fflush(stdout)
 
 void subroutine_decompose(const Machine input_machine, usize depth) {
+    assert(depth == 1);
+    bool connection_field[STATES * SYMBOLS] = {0};
 
 }
 
