@@ -1,3 +1,4 @@
+#define DEFINITIONS
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned int u32;
@@ -29,13 +30,16 @@ typedef struct TM_Tape {
 } TM_Tape;
 
 typedef enum direction {
-	HALT,
-	LEFT,
-	RIGHT,
+	LEFT = -1,
+	RIGHT = 1,
 } Direction;
 
-typedef struct state {
+typedef struct instruction {
 	char write;
 	Direction dir;
 	char next_state;
-} state;
+} Instruction;
+
+#ifndef DEBUG
+    #define assert(msg, x) (x)
+#endif
