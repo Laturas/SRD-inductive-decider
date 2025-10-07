@@ -12,6 +12,8 @@
     #include "defs.h"
 #endif
 
+#include "arena_allocator.c"
+
 
 _Static_assert(SYMBOLS <= 10, "Only up to 10 symbols is currently supported.");
 _Static_assert(STATES <= 26, "Only up to 26 states is currently supported.");

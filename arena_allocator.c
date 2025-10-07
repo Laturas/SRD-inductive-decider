@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #ifndef DEFINITIONS
     #include "defs.h"
 #endif
@@ -11,13 +12,13 @@ typedef struct Arena {
 } Arena;
 
 // You can swap out these functions with any allocator of your choice.
-[[no_discard]] void* SYSTEM_DEPENDENT_underlying_allocator(usize byte_count) {
+void* SYSTEM_DEPENDENT_underlying_allocator(usize byte_count) {
     return malloc(byte_count);
 }
-[[no_discard]] void* SYSTEM_DEPENDENT_underlying_re_allocator(void* original, usize byte_count) {
+void* SYSTEM_DEPENDENT_underlying_re_allocator(void* original, usize byte_count) {
     return realloc(original, byte_count);
 }
-[[no_discard]] void* SYSTEM_DEPENDENT_underlying_free(void* to_free) {
+void* SYSTEM_DEPENDENT_underlying_free(void* to_free) {
     free(to_free);
     return NULL;
 }
@@ -33,10 +34,10 @@ Arena arena_init(usize byte_count) {
 }
 
 /// For internal usage only
-Arena _arena_expand(Arena old_arena, usize byte_count) {
-    u8* bytes = SYSTEM_DEPENDENT_underlying_re_allocator(old_arena.bytes, byte_count);
+Arena _arena_expand(Arena old_arena, usize new_byte_count) {
+    u8* bytes = SYSTEM_DEPENDENT_underlying_re_allocator(old_arena.bytes, new_byte_count);
     Arena final_arena = {
-        byte_count,
+        new_byte_count,
         old_arena.number_of_bytes_in_use,
         bytes
     };
@@ -60,10 +61,22 @@ void afree(Arena* arena_to_free) {
 void* aalloc(Arena* arena, usize byte_count) {
     assert("Empty arena passed into aalloc", arena->underlying_allocation_amount != 0);
     while (arena->number_of_bytes_in_use + byte_count >= arena->underlying_allocation_amount) {
-        arena->bytes = SYSTEM_DEPENDENT_underlying_re_allocator(arena->bytes, arena->underlying_allocation_amount * 2);
-        arena->underlying_allocation_amount *= 2;
+        *arena = _arena_expand(*arena, arena->underlying_allocation_amount * 2);
     }
-    u8* allocated_bytes = &arena->bytes[byte_count];
+    u8* allocated_bytes = &arena->bytes[arena->number_of_bytes_in_use];
     arena->number_of_bytes_in_use += byte_count;
     return allocated_bytes;
+}
+/// Allocates some number of bytes onto a given arena. Ensures the returned memory is zero
+void* aalloc_zero(Arena* arena, usize byte_count) {
+    usize old_max_bytes = arena->number_of_bytes_in_use;
+    void* allocated_bytes = aalloc(arena, byte_count);
+    memset(&arena->bytes[old_max_bytes], 0, byte_count);
+    return allocated_bytes;
+}
+
+
+// Returns the location of the pointer relative to the arena
+usize relative_pointer(Arena arena, void* pointer) {
+    return (usize)((usize)pointer - (usize)arena.bytes);
 }

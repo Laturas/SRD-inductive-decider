@@ -79,11 +79,36 @@ void test_unaccelerated_running() {
     fprintf(stderr, "Unaccelerated running tests passed\n");
 }
 
+void test_arena_allocator() {
+    Arena test_arena = arena_init(1024);
+    assert("Bytes is null", test_arena.bytes != NULL);
+    assert("Bytes in use isn't 0 on initialization", test_arena.number_of_bytes_in_use == 0);
+    assert("Allocated the wrong number of bytes", test_arena.underlying_allocation_amount == 1024);
+    u8* allocated_block = aalloc(&test_arena, 1025);
+    assert("Invalid memory returned", allocated_block != NULL);
+
+    u8* second_allocated_block = aalloc_zero(&test_arena, 500);
+    assert("Relative pointer fail", relative_pointer(test_arena, second_allocated_block) == (usize)1025);
+    assert("Incorrect number of bytes in use", test_arena.number_of_bytes_in_use == 1525);
+    assert("Incorrect underlying byte count", test_arena.underlying_allocation_amount == 2048);
+    for (usize i = 0; i < 500; i++) {
+        assert("aalloc_zero doesn't zero memory", second_allocated_block[i] == 0);
+    }
+    u8* old_ptr = test_arena.bytes;
+    aclear(&test_arena);
+    assert("Pointer changed", test_arena.bytes == old_ptr);
+
+    fprintf(stderr, "Arena allocator tests passed\n");
+}
+
 /// Reads in command line arguments. Standard main function stuff.
 int main(int argc, char* argv[]) {
+    // These tests are laid out in order of dependency
+    // If an earlier one fails, the other ones will (probably) fail
+    test_arena_allocator();
     test_parsing();
     test_unaccelerated_running();
 
-    fprintf(stderr, "All tests passing\n");
+    fprintf(stderr, "\nAll tests passing\n");
     return 0;
 }
