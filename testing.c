@@ -70,6 +70,18 @@ void test_unaccelerated_running() {
     tape_state = tape_state_init(65565);
     assert("Test erroneously reported that the BB5 champ halts early", simulate_unaccelerated(test_bb5_champ, &tape_state, 47176869) == SIMULATION_MAX_STEPS);
     assert("Test erroneously reported that a halting TM didn't halt", simulate_unaccelerated(test_bb5_champ, &tape_state, 1) == SIMULATION_HALTED);
+    
+    // RLBlock zero_block = {0, 1};
+    // RLBlock one_block = {1, 1};
+    // // Collapse zeros
+    // RLBlock* rle_tape = calloc( 65565, sizeof(RLBlock));
+    // RLETapeState rlets = run_length_collapse_raw_to_rle(tape_state, zero_block, rle_tape);
+    // Collapse ones
+    // run_length_collapse(&rlets, one_block);
+
+    // print_rletape(rlets, stdout);
+    
+    // free(rle_tape);
     free(tape_state.tape);
     
     tape_state = tape_state_init(1);
@@ -106,28 +118,35 @@ void test_rle_collapse() {
     Arena scratch_arena = arena_init(sizeof(RLBlock) * 4096);
     RLBlock* rle_tape = aalloc_zero(&scratch_arena, sizeof(RLBlock) * 1024);
 
-    /*
-    typedef struct {
-        RLBlock* tape;
-        usize count;
-        int state;
-        usize current_position;
-        usize min_visited;
-        usize max_visited;
-    } RLETapeState;
-    */
-    // RLETapeState new_tape = {rle_tape};
-
     char* raw_tape = aalloc_zero(&scratch_arena, 1024);
     TapeState config = {raw_tape, 1024, 0, 500, 500, 550};
     config.tape[525] = 1;
     config.tape[526] = 1;
     RLBlock zero_block = {0, 1};
-    RLETapeState rlets = run_length_collapse_raw_to_rle(config, zero_block, rle_tape);
-    print_rletape(rlets, stderr);
+    RLBlock one_block = {1, 1};
 
-    // RLETapeState run_length_collapse_raw_to_rle(const TapeState config, RLBlock collapse_block, RLBlock* run_tape);
+    // Collapse zeros
+    RLETapeState rlets = run_length_collapse_raw_to_rle(config, zero_block, rle_tape);
+    // Collapse ones
+    run_length_collapse(&rlets, one_block);
+
+    FILE* test_file = fopen("__testing.txt", "wb+"); // This is the only way I could find to test this in a platform-independent manner.
+    assert("File opening during test failed", test_file);
+    print_rletape(rlets, test_file);
+    String contents = read_file_unbuffered(test_file);
+
+    // The - 1 in the sizeof comes from the fact that the last character wont match (due to platform independence, it may be \n or \r\n.)
+    // (the string being compared to will obviously end with \0)
+    assert("Simple tape collapse failure",
+        strncmp(contents.str, "$ A> (0)^25 (1)^2 (0)^24 $", sizeof("$ A> (0)^25 (1)^2 (0)^24 $") - 1) == 0
+    );
+    free(contents.str);
+
+    assert("File closing during test failed", !fclose(test_file));
+    assert("File removal during test failed", !remove("__testing.txt"));
     afree(&scratch_arena);
+
+    fprintf(stderr, "Simple rle tests passed\n");
 }
 
 /// Reads in command line arguments. Standard main function stuff.

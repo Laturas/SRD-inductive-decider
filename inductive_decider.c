@@ -90,6 +90,12 @@ TMSimulationResult simulate_unaccelerated(const Machine input_machine, TapeState
         }
         config->current_position += next_direction;
         config->state = next_state;
+        if (config->min_visited > config->current_position) {
+            config->min_visited = config->current_position;
+        }
+        if (config->max_visited < config->current_position) {
+            config->max_visited = config->current_position;
+        }
     }
     return SIMULATION_MAX_STEPS;
     #undef CURRENT_CELL
@@ -322,11 +328,47 @@ void print_rletape(RLETapeState rle_tape_state, FILE* out) {
         }
         fprintf(out, "(%c)^%llu ", INT_TO_NUMERIC((char)rle_tape_state.tape[i].block), rle_tape_state.tape[i].run_length);
     }
-    fprintf(out, "$");
+    fprintf(out, "$\n");
 }
 
-RLETapeState run_length_collapse(RLETapeState* config, RLBlock collapse_block) {
-    assert("TODO: run_length_collapse(RLETapeState* config, RLBlock collapse_block) Unimplemented", false);
+// O(n) algorithm because it has to shift everything back and read every block.
+// Note: Collapsing a block that the head is currently in is left as undefined behavior.
+void run_length_collapse(RLETapeState* config, RLBlock collapse_block) {
+    int current_run_length = 0;
+    int final_tape_pos = config->min_visited;
+    int final_max_visited = config->max_visited;
+    // max_visited has to be inclusive because it's a valid cell. It has been visited.
+    for (int i = config->min_visited; i <= config->max_visited; i++) {
+        if (config->tape[i].block == collapse_block.block) {
+            final_max_visited = (current_run_length == 0) ? final_max_visited : final_max_visited - 1;
+            current_run_length++;
+            if (i < config->current_position) {
+                config->current_position--;
+            }
+            continue;
+        }
+        if (current_run_length > 0) {
+            RLBlock run_length_block = {collapse_block.block, current_run_length};
+            config->tape[final_tape_pos] = run_length_block;
+            final_tape_pos++;
+            current_run_length = 0;
+        }
+        config->tape[final_tape_pos] = config->tape[i];
+        final_tape_pos++;
+    }
+    if (current_run_length > 0) {
+        RLBlock run_length_block = {collapse_block.block, current_run_length};
+        config->tape[final_tape_pos] = run_length_block;
+        final_tape_pos++;
+        current_run_length = 0;
+    }
+    // Making sure to clear the cells outside the bounds so we don't get any weirdness later on.
+    // Maybe remove if unnecessary down the line?
+    RLBlock zero_block = {0};
+    for (int i = final_max_visited + 1; i <= config->max_visited; i++) {
+        config->tape[i] = zero_block;
+    }
+    config->max_visited = final_max_visited;
 }
 
 RLETapeState run_length_collapse_raw_to_rle(const TapeState config, RLBlock collapse_block, RLBlock* run_tape) {
@@ -367,6 +409,14 @@ RLETapeState run_length_collapse_raw_to_rle(const TapeState config, RLBlock coll
 /// the block, and what state it will be when it exits the block
 ///
 /// Example contract: {A>, C(a,b,c), D>}
+///
+/// How do we store the return of a contract?
+/// Bounded primitive function application
+/// A function in this context can be seen as a repeated application of some lower level function
+/// f(n) = g^k(n)
+/// C(a,b,c)
+/// Operations: 
+/// 
 ///
 /// Question 1: How do we store a list of contracts to be quickly accessible?
 /// Question 2: How do we detect when to make a new contract?
