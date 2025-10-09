@@ -9,6 +9,10 @@
 
 #include "inductive_decider.c"
 
+void help_menu() {
+    // TODO: Implement help menu
+}
+
 /// Reads in command line arguments. Standard main function stuff.
 int main(int argc, char* argv[]) {
     assert("Less than 1 argument (indicates an error)", argc > 0);

@@ -4,7 +4,7 @@
     #include "defs.h"
 #endif
 
-typedef struct Arena {
+typedef struct _Arena {
     usize underlying_allocation_amount;
     usize number_of_bytes_in_use;
 
@@ -50,7 +50,7 @@ void aclear(Arena* old_arena) {
     old_arena->number_of_bytes_in_use = 0;
 }
 
-// Frees the underlying memory of the arena and zeros it out
+// Frees the underlying memory of the arena and zeros out the struct
 void afree(Arena* arena_to_free) {
     arena_to_free->bytes = SYSTEM_DEPENDENT_underlying_free(arena_to_free->bytes);
     arena_to_free->underlying_allocation_amount = 0;
@@ -75,8 +75,15 @@ void* aalloc_zero(Arena* arena, usize byte_count) {
     return allocated_bytes;
 }
 
+typedef usize RelativeArenaPtr;
 
 // Returns the location of the pointer relative to the arena
-usize relative_pointer(Arena arena, void* pointer) {
-    return (usize)((usize)pointer - (usize)arena.bytes);
+RelativeArenaPtr relative_pointer(const Arena arena, void* pointer) {
+    return (RelativeArenaPtr)((usize)pointer - (usize)arena.bytes);
 }
+
+#ifdef DEBUG
+#define ARENA_GET(arena, arena_ptr) (assert("Out of bounds arena access", (arena_ptr >= 0) && (arena_ptr < arena.number_of_bytes_in_use)), arena.bytes[arena_ptr])
+#else
+#define ARENA_GET(arena, arena_ptr) (arena.bytes[arena_ptr])
+#endif

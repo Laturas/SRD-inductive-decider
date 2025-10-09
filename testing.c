@@ -88,7 +88,7 @@ void test_arena_allocator() {
     assert("Invalid memory returned", allocated_block != NULL);
 
     u8* second_allocated_block = aalloc_zero(&test_arena, 500);
-    assert("Relative pointer fail", relative_pointer(test_arena, second_allocated_block) == (usize)1025);
+    assert("Relative pointer fail", relative_pointer(test_arena, second_allocated_block) == (RelativeArenaPtr)1025);
     assert("Incorrect number of bytes in use", test_arena.number_of_bytes_in_use == 1525);
     assert("Incorrect underlying byte count", test_arena.underlying_allocation_amount == 2048);
     for (usize i = 0; i < 500; i++) {
@@ -97,8 +97,37 @@ void test_arena_allocator() {
     u8* old_ptr = test_arena.bytes;
     aclear(&test_arena);
     assert("Pointer changed", test_arena.bytes == old_ptr);
+    afree(&test_arena);
 
     fprintf(stderr, "Arena allocator tests passed\n");
+}
+
+void test_rle_collapse() {
+    Arena scratch_arena = arena_init(sizeof(RLBlock) * 4096);
+    RLBlock* rle_tape = aalloc_zero(&scratch_arena, sizeof(RLBlock) * 1024);
+
+    /*
+    typedef struct {
+        RLBlock* tape;
+        usize count;
+        int state;
+        usize current_position;
+        usize min_visited;
+        usize max_visited;
+    } RLETapeState;
+    */
+    // RLETapeState new_tape = {rle_tape};
+
+    char* raw_tape = aalloc_zero(&scratch_arena, 1024);
+    TapeState config = {raw_tape, 1024, 0, 500, 500, 550};
+    config.tape[525] = 1;
+    config.tape[526] = 1;
+    RLBlock zero_block = {0, 1};
+    RLETapeState rlets = run_length_collapse_raw_to_rle(config, zero_block, rle_tape);
+    print_rletape(rlets, stderr);
+
+    // RLETapeState run_length_collapse_raw_to_rle(const TapeState config, RLBlock collapse_block, RLBlock* run_tape);
+    afree(&scratch_arena);
 }
 
 /// Reads in command line arguments. Standard main function stuff.
@@ -108,6 +137,7 @@ int main(int argc, char* argv[]) {
     test_arena_allocator();
     test_parsing();
     test_unaccelerated_running();
+    test_rle_collapse();
 
     fprintf(stderr, "\nAll tests passing\n");
     return 0;
