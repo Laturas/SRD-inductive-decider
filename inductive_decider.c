@@ -255,15 +255,6 @@ typedef struct Contract {
     u32 block_definition;
 } Contract;
 
-/// Block structure:
-/// (string of chars)^len(string of chars)^len...
-/// Need a count of strings
-/// Store them contiguously
-typedef struct Block {
-    u32 block_hash;
-    u32 sub_block_count;
-    RelativeArenaPtr first_string;
-} Block;
 int circular_buffer_size;
 u32* circular_buffer;
 
@@ -272,10 +263,6 @@ typedef enum SimulationInterrupt {
     INTERRUPT_UNDEFINED_BLOCK,  // Machine reached a transition it doesn't know how to handle
     INTERRUPT_OUT_OF_MEMORY,    // Ran out of memory
 } SimulationInterrupt;
-
-Arena scratch_arena;
-Arena block_definitions;
-Arena run_length_tape_arena;
 
 // Tape: block run_length block run_length
 
@@ -306,10 +293,19 @@ SimulationInterrupt accelerated_run(const Machine input_machine, TapeState* conf
     #undef CURRENT_CELL
 }
 
+/*
+* New block {
+    int number_of_sub_blocks;
+    int first_sub_block
+}
+*/
+
 typedef struct RLBlock {
     usize block;
     usize run_length;
-} RLBlock;
+} RLBlock, Block;
+
+#define ANY_LENGTH (usize)(-1)
 
 typedef struct {
     RLBlock* tape;
@@ -403,6 +399,64 @@ RLETapeState run_length_collapse_raw_to_rle(const TapeState config, RLBlock coll
     return final_tape;
 }
 
+/// A block needs just the block ID and the run length
+/// A block definition is an array of blocks {{A, *}, {B, *}, {C, 2*}, {1, 3}}
+///
+/// The definition needs to specify if it's an exact amount or a stand in for "unbounded". Let -1 be the value of an unbounded number of blocks
+typedef struct BlockDefinition {
+    RelativeArenaPtr block_array;
+    usize array_size;
+} BlockDefinition;
+
+
+typedef struct FatStruct {
+    const Machine machine;
+    Arena scratch_arena;
+    Arena block_definitions_arena;
+    Arena run_length_tape_arena;
+    RLETapeState* tape_state;
+    BlockDefinition* block_definitions_array;
+    Block* block_arrays;
+
+} ExecutionContext, SimulationContext;
+
+/// Initializes the fat struct for the accelerated simulation
+/// Initializes all of the memory arenas and the blank tape state
+ExecutionContext accelerated_simulation_init(const Machine input_machine) {
+    ExecutionContext new_context = {.machine = input_machine};
+
+    new_context.scratch_arena           = arena_init(4096);
+    new_context.block_definitions_arena = arena_init(sizeof(BlockDefinition) * 4096);
+    new_context.run_length_tape_arena   = arena_init(4096 * sizeof(*new_context.tape_state->tape) + sizeof(new_context.tape_state));
+
+    new_context.tape_state = aalloc(&new_context.run_length_tape_arena, sizeof(new_context.tape_state));
+
+    new_context.tape_state->count = 4096;
+    new_context.tape_state->current_position = new_context.tape_state->count / 2;
+    new_context.tape_state->max_visited = new_context.tape_state->current_position;
+    new_context.tape_state->min_visited = new_context.tape_state->current_position;
+    new_context.tape_state->state = 0;
+    new_context.tape_state->tape = aalloc_zero(&new_context.run_length_tape_arena, 4096 * sizeof(*new_context.tape_state->tape));
+
+    new_context.block_definitions_array = aalloc_zero(&new_context.block_definitions_arena, sizeof(BlockDefinition) * 4096);
+    // Block zero_block = {0, ANY_LENGTH};
+    // Block one_block  = {1, ANY_LENGTH};
+    // new_context.block_arrays[0] = zero_block;
+    // new_context.block_arrays[1] = one_block;
+    new_context.block_definitions_array[0] = 
+
+    return new_context;
+}
+
+ExecutionContext accelerated_simulation_close(ExecutionContext context) {
+    Arena null_arena = {0};
+    afree(&context.run_length_tape_arena); context.run_length_tape_arena = null_arena;
+    afree(&context.scratch_arena); context.scratch_arena = null_arena;
+    afree(&context.block_definitions_arena); context.block_definitions_arena = null_arena;
+    ExecutionContext null_context = {0};
+    return null_context;
+}
+
 /// A "stride" is equivalent to one accelerated step.
 ///
 /// A "contract" defines a stride. It includes what needs to be on the tape, what state the machine needs to be when entering
@@ -421,13 +475,7 @@ RLETapeState run_length_collapse_raw_to_rle(const TapeState config, RLBlock coll
 /// Question 1: How do we store a list of contracts to be quickly accessible?
 /// Question 2: How do we detect when to make a new contract?
 ///
-TMSimulationResult simulate_accelerated(const Machine input_machine, TapeState* config, const usize max_number_of_strides) {
-    scratch_arena         = arena_init(4096);
-    block_definitions     = arena_init(4096);
-    run_length_tape_arena = arena_init(sizeof(RLBlock) * 4096);
-
-    RelativeArenaPtr rle_tape = relative_pointer(run_length_tape_arena, aalloc_zero(&run_length_tape_arena, sizeof(RLBlock) * 4096));
-
+TMSimulationResult simulate_accelerated(ExecutionContext execution_context) {
     // RLETapeState state = {
     //     rle_tape;
     // }
